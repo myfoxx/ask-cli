@@ -72,7 +72,7 @@ cd my-project
 ask -c "explain the structure of this project"
 ```
 
-### Error Mode (`-e`) or `askerr`
+### Error Mode (`-e`)
 
 Analyze errors in two ways:
 
@@ -96,15 +96,77 @@ Analyze errors in two ways:
 ask -m mistral "write a poem about linux"
 ```
 
-## Configuration (Aliases)
+### Advanced Flags
 
-We recommend adding the provided aliases to your `.bashrc` or `.zshrc` for a faster workflow:
+- **Input Limiting** (`-l`): Truncate large logs to prevent token overflow
+  ```bash
+  ask -e -l 50 make build  # Max 50 lines of error
+  ```
+
+- **Timeout** (`-t`): Prevent hanging on slow models
+  ```bash
+  ask -t 30 "explain kubernetes"  # 30-second timeout
+  ```
+
+- **Save Output** (`-s`): Save responses to file
+  ```bash
+  ask -s notes.md "explain Docker"
+  ask -a -s history.log "explain Ansible"  # Append with -a
+  ```
+
+- **Caching** (`--cache`): Cache responses for repeated queries
+  ```bash
+  ask --cache "how to install rust?"  # Instant second time
+  ask --clear-cache  # Clear cache
+  ```
+
+- **List Models** (`--list-models`): Show available Ollama models
+  ```bash
+  ask --list-models
+  ```
+
+- **Raw Output** (`-R`): Disable glow formatting
+  ```bash
+  ask -R "question" | grep "specific"
+  ```
+
+- **Verbose** (`-v`): Show debug information
+  ```bash
+  ask -v "question"
+  ```
+
+## Configuration
+
+### Config File (~/.askrc)
+
+Create `~/.askrc` to customize defaults. See `.askrc-example` for available options:
+
+```bash
+# ~/.askrc
+VERBOSE=true
+MAX_LINES=100
+TIMEOUT=120
+CACHE_ENABLED=true
+```
+
+### Aliases
+
+Recommended aliases for `.bashrc` or `.zshrc`:
 
 ```bash
 alias askcode='ask -m qwen2.5-coder:latest'   # Coding specialist
 alias askhere='ask -c'                        # Context aware
 alias askerr='ask -e'                         # Error analysis
+alias askdeep='ask -m deepseek-r1:latest'     # Deep thinking
+alias askv='ask -v'                           # Verbose mode
+alias askarchive='ask -a -s ~/.ask-history'   # Save to history
 ```
+
+## Documentation
+
+- **Basic Guide**: See [README.md](README.md) (this file)
+- **Advanced Usage**: See [ADVANCED.md](ADVANCED.md) for edge cases, performance tips, and complex examples
+
 
 ## License
 

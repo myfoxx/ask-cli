@@ -1,0 +1,35 @@
+# Cache
+.ask-cache/
+~/.ask-cache
+
+# Config file (personal, don't commit)
+.askrc
+
+# History files
+.ask-history
+.ask-history.log
+
+# Temporary files
+*.tmp
+*.temp
+*~
+
+# Editor files
+.vscode/
+.idea/
+*.swp
+*.swo
+*.swn
+.DS_Store
+
+# OS files
+Thumbs.db
+*.log
+
+# Test artifacts
+test-output/
+coverage/
+
+# IDE
+.cursor/
+.github/workflows/*.local.yml

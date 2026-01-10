@@ -1,0 +1,9 @@
+e poi ci metti gli alias 
+
+# Alias per Ollama CLI helper
+alias askcode='ask -m qwen2.5-coder:latest'   # Coding specialist
+alias askhere='ask -c'                        # Context aware
+alias askerr='ask -e'                         # Error analysis wrapper
+alias askmistral='ask -m mistral:latest'      # Mistral variant
+alias askv='ask -v'                           # Verbose mode
+alias askdeep='ask -m deepseek-r1:latest'     # Deep thinking

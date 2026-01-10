@@ -1,0 +1,243 @@
+#!/bin/bash
+# ask - Wrapper intelligente per Ollama
+# Ottimizzato per: qwen2.5-coder, deepseek-r1, llama3.1:8b, mistral
+
+INCLUDE_CONTEXT=false
+ERROR_MODE=false
+MANUAL_MODEL=""
+VERBOSE=false
+USE_GLOW=true
+
+# --- Dependency Checks ---
+check_dependencies() {
+    if ! command -v ollama &> /dev/null; then
+        echo "Errore: 'ollama' non è installato o non è nel PATH." >&2
+        exit 1
+    fi
+
+    if ! pgrep -x "ollama" > /dev/null && ! curl -s http://localhost:11434/api/tags >/dev/null; then
+        echo "Attenzione: Il server Ollama non sembra essere in esecuzione." >&2
+        echo "Provo ad avviarlo..." >&2
+        echo "Assicurati che 'ollama serve' stia girando." >&2
+    fi
+}
+
+# --- Model Selection Logic ---
+select_model() {
+    local q_lower
+    q_lower=$(echo "$1" | tr '[:upper:]' '[:lower:]')
+    
+    if [ "$ERROR_MODE" = true ]; then
+        echo "deepseek-r1:latest"
+        return
+    fi
+
+    # Qwen2.5-coder: code, scripting, file operations
+    if echo "$q_lower" | grep -qE "(script|codice|code|comando|command|bash|python|rust|go|javascript|converti|convert|file|directory|sed|awk|grep|find|rsync|tar|zip|gzip|pdf|doc|docx|rename|permess|chmod|chown|systemd|service|socket|timer|pacman|yay|paru|makepkg|pkgbuild|aur|one.liner|oneliner|regex|parse|extract|compress)"; then
+        echo "qwen2.5-coder:latest"
+        return
+    fi
+    
+    # DeepSeek-R1: reasoning, troubleshooting, security
+    if echo "$q_lower" | grep -qE "(perch[eé]|ragiona|ragionamento|spiega|analizza|debug|debugg|problema|errore|error|failed|fallito|matematica|logica|dimostra|prova|compara|confronta|differenza tra|migliore approccio|trade.?off|ottimizza|performance|sicurezza|vulnerab|exploit|attack|CVE)"; then
+        echo "deepseek-r1:latest"
+        return
+    fi
+    
+    echo "llama3.1:8b"
+}
+
+# --- Model Availability Check & Fallback ---
+get_available_model() {
+    local target_model="$1"
+    
+    if ollama list | grep -q "^${target_model%%:*}"; then
+        echo "$target_model"
+        return
+    fi
+
+    echo "Attenzione: Il modello '$target_model' non è presente." >&2
+    local fallbacks=("llama3.1:8b" "mistral:latest" "gemma:2b" "qwen2.5:0.5b")
+    for fb in "${fallbacks[@]}"; do
+        if ollama list | grep -q "^${fb%%:*}"; then
+            echo "Fallback su: $fb" >&2
+            echo "$fb"
+            return
+        fi
+    done
+    
+    echo "Errore: Nessun modello compatibile trovato localmente." >&2
+    exit 1
+}
+
+# --- Main Script ---
+
+check_dependencies
+
+while getopts "cm:vheR" opt; do
+    case $opt in
+        c) INCLUDE_CONTEXT=true ;;
+        e) ERROR_MODE=true ;;
+        m) MANUAL_MODEL="$OPTARG" ;;
+        v) VERBOSE=true ;;
+        R) USE_GLOW=false ;; # Raw output flag
+        h)
+            echo "Usage: ask [-c] [-e] [-m MODEL] [-v] [-R] <domanda o comando>"
+            echo "  -c: Include contesto directory corrente"
+            echo "  -e: Modalità Errore / Debug (Pipe o Wrapper)"
+            echo "  -m: Forza modello specifico"
+            echo "  -R: Output Raw (disabilita formattazione glow)"
+            echo "  -v: Mostra dettagli"
+            exit 0
+            ;;
+        \?) echo "Opzione non valida: -$OPTARG" >&2; exit 1 ;;
+    esac
+done
+
+shift $((OPTIND-1))
+
+# Check Input Sources
+PIPED_INPUT=""
+COMMAND_TO_RUN=""
+QUESTION=""
+
+if [ ! -t 0 ]; then
+    PIPED_INPUT=$(cat)
+fi
+
+if [ "$ERROR_MODE" = true ] && [ -n "$*" ]; then
+    if [ -z "$PIPED_INPUT" ]; then
+        COMMAND_TO_RUN="$*"
+    else
+        QUESTION="$*"
+    fi
+else
+    QUESTION="$*"
+fi
+
+if [ -n "$COMMAND_TO_RUN" ]; then
+    if [ "$VERBOSE" = true ]; then
+        echo "[Eseguo comando: $COMMAND_TO_RUN]" >&2
+    fi
+    # Creiamo un file temporaneo per output
+    OUTPUT_FILE=$(mktemp)
+    # Eseguiamo preservando i colori se possibile (script/unbuffer potrebbe aiutare ma keep simple)
+    eval "$COMMAND_TO_RUN" > "$OUTPUT_FILE" 2>&1
+    EXIT_CODE=$?
+    
+    if [ $EXIT_CODE -eq 0 ]; then
+        cat "$OUTPUT_FILE"
+        rm "$OUTPUT_FILE"
+        exit 0
+    else
+        cat "$OUTPUT_FILE"
+        PIPED_INPUT=$(cat "$OUTPUT_FILE")
+        rm "$OUTPUT_FILE"
+        QUESTION="Il comando '$COMMAND_TO_RUN' è fallito (Exit code: $EXIT_CODE). Analizza l'output e spiega l'errore."
+        echo "" >&2
+        echo "--- ASK ANALYSIS ---" >&2
+    fi
+fi
+
+if [ -z "$QUESTION" ] && [ -z "$PIPED_INPUT" ]; then
+    if [ "$ERROR_MODE" = true ]; then
+        echo "Errore: -e richiede un comando da lanciare o input via pipe."
+    else
+        echo "Errore: nessuna domanda specificata."
+    fi
+    exit 1
+fi
+
+if [ -n "$PIPED_INPUT" ] && [ -z "$QUESTION" ]; then
+    QUESTION="Analizza il seguente output/errore e spiega il problema:"
+fi
+
+# --- Model Target ---
+if [ -n "$MANUAL_MODEL" ]; then
+    case "$MANUAL_MODEL" in
+        qwen*|coder) TARGET_MODEL="qwen2.5-coder:latest" ;;
+        deep*|r1) TARGET_MODEL="deepseek-r1:latest" ;;
+        llama*|llama3.1) TARGET_MODEL="llama3.1:8b" ;;
+        mistral*) TARGET_MODEL="mistral:latest" ;;
+        *) TARGET_MODEL="$MANUAL_MODEL" ;;
+    esac
+else
+    TARGET_MODEL=$(select_model "$QUESTION")
+fi
+
+MODEL=$(get_available_model "$TARGET_MODEL")
+
+# --- Dynamic System Context ---
+OS_INFO=$(uname -sr 2>/dev/null || echo "Linux Unknown")
+SHELL_INFO="${SHELL##*/}"
+
+BASE_SYSTEM_PROMPT="Sei un esperto operante su un sistema ${OS_INFO}, shell: ${SHELL_INFO}.
+Linguaggio: Italiano (tecnico).
+Sicurezza: SE IL COMANDO RICHIESTO È DISTRUTTIVO (rm -rf, dd, mkfs, ecc.), AVVISA ESPLICITAMENTE L'UTENTE PRIMA DI PROPORLO."
+
+if [[ "$MODEL" == *"coder"* ]]; then
+    SYSTEM_CONTEXT="${BASE_SYSTEM_PROMPT}
+Ruolo: Senior Dev/Sysadmin. CLI only.
+Risposta: comando diretto o fix. Zero spiegazioni teoriche superflue.
+Formato: command ready-to-run se possibile."
+elif [[ "$MODEL" == *"deepseek"* ]]; then
+    SYSTEM_CONTEXT="${BASE_SYSTEM_PROMPT}
+Ruolo: Security Researcher / Senior Sysadmin.
+Reasoning tecnico richiesto: root cause analysis dell'errore.
+Focus: debug logico, dipendenze mancanti, permission issues."
+elif [[ "$MODEL" == *"mistral"* ]]; then
+    SYSTEM_CONTEXT="${BASE_SYSTEM_PROMPT}
+Ruolo: Power User. CLI-first approach.
+Output: soluzione pratica e actionable."
+else
+    SYSTEM_CONTEXT="${BASE_SYSTEM_PROMPT}
+Ruolo: Professional User.
+Preferenza CLI-first. Comunicazione diretta e tecnica."
+fi
+
+# --- Prompt Construction ---
+PROMPT="${SYSTEM_CONTEXT}
+
+"
+
+if [ "$INCLUDE_CONTEXT" = true ]; then
+    PROMPT+="[Contesto Directory Corrente]\n"
+    PROMPT+="Path: $(pwd)\n"
+    
+    if command -v eza &>/dev/null; then
+        FILE_LIST=$(eza --oneline --color=always | head -n 20) # Colori rimossi da prompt testuale per evitare noise? No, meglio plain.
+        FILE_LIST=$(eza --oneline --color=never | head -n 20)
+    elif command -v exa &>/dev/null; then
+        FILE_LIST=$(exa --oneline --color=never | head -n 20)
+    else
+        FILE_LIST=$(ls -1 | head -n 20)
+    fi
+    
+    PROMPT+="Files:\n${FILE_LIST}\n\n"
+fi
+
+if [ -n "$PIPED_INPUT" ]; then
+    PROMPT+="[INPUT/LOG DA ANALIZZARE]\n"
+    PROMPT+="'''\n"
+    PROMPT+="${PIPED_INPUT}\n"
+    PROMPT+="'''\n\n"
+fi
+
+PROMPT+="Richiesta: ${QUESTION}"
+
+if [ "$VERBOSE" = true ]; then
+    echo "--- Debug Info ---" >&2
+    echo "Model: $MODEL" >&2
+    echo "OS: $OS_INFO, Shell: $SHELL_INFO" >&2
+    [ -n "$PIPED_INPUT" ] && echo "Input: $(echo "$PIPED_INPUT" | wc -l) lines captured" >&2
+    echo "------------------" >&2
+fi
+
+# Esecuzione con Pipe a Glow (se disponibile e non disabilitato)
+if [ "$USE_GLOW" = true ] && command -v glow &>/dev/null; then
+    # Usiamo un trick per preservare lo streaming se possibile, ma glow di solito bufferizza o pagina.
+    # 'glow -' legge da stdin.
+    ollama run "$MODEL" "$PROMPT" | glow -
+else
+    ollama run "$MODEL" "$PROMPT"
+fi

@@ -85,9 +85,9 @@ bats test.bats
    git push origin feature/your-feature-name
    ```
 
-5.- **Use the Templates**: We have issue and PR templates for a reason. Please use them.
-
-- **Run Tests**: If you add a new feature, add a test case in `test.bats`.
+5. **Open a Pull Request**:
+   - **Use the Templates**: We have issue and PR templates for a reason. Please use them.
+   - **Run Tests**: If you add a new feature, add a test case in `test.bats`.
 
 ## Bug Reports
 
@@ -124,8 +124,8 @@ For maintainers releasing new versions:
 3. **Create a git tag**:
 
    ```bash
-   git tag -a v3.1.0 -m "Release version 3.1.0"
-   git push origin v3.1.0
+   git tag -a v3.2.0 -m "Release version 3.2.0"
+   git push origin v3.2.0
    ```
 
 4. **Create GitHub Release** with:

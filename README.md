@@ -41,8 +41,8 @@
 1. **Clone the repository**:
 
    ```bash
-   git clone https://gitlab.com/yourusername/ask.git
-   cd ask
+   git clone https://github.com/myfoxx/ask-cli.git
+   cd ask-cli
    ```
 
 2. **Make it executable**:

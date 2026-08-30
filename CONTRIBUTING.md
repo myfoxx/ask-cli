@@ -15,8 +15,8 @@ Thank you for interest in contributing to ASK! This document provides guidelines
 2. **Clone your fork**:
 
    ```bash
-   git clone https://github.com/YOUR-USERNAME/ask.git
-   cd ask
+   git clone https://github.com/YOUR-USERNAME/ask-cli.git
+   cd ask-cli
    ```
 
 3. **Create a branch** for your feature:

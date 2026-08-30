@@ -5,6 +5,34 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [3.2.0] - 2026-08-31
+
+### Fixed
+- **Model Routing**: Routing and fallback chain pointed at models that were never actually
+  pulled (`qwen2.5-coder`, `deepseek-r1`, `llama3.1`, `mistral`), causing every query to
+  silently fall back to whatever generic model happened to be installed. Routing and
+  fallback chain now target the models actually shipped/tested with (`qwen3.5:latest`,
+  `gemma3:1b`, `gemma:2b`, `gemma4:e4b`), ordered smallest/fastest first.
+- **Response Latency**: `qwen3.5` is a hybrid thinking model; without disabling thinking
+  mode it leaked internal `<think>` reasoning into the output, turning what should be a
+  2-7 second answer into 21-67 seconds. Every `ollama run` call now passes `--think=false`.
+- **`-m coder`/`-m deep`/`-m llama`/`-m mistral` shortcuts**: previously resolved to
+  uninstalled models; now map to `qwen3.5:latest`.
+
+### Added
+- **`-f` / `--fast` flag**: forces `gemma3:1b` for a near-instant answer.
+- **`-m fast`/`-m small`/`-m tiny`** shortcuts for `gemma3:1b`.
+- **`OLLAMA_CONTEXT_LENGTH=4096` cap** on every model call to reduce VRAM pressure on
+  8GB-class GPUs when using `-c` (directory context) or large piped/`-e` input.
+
+### Changed
+- **System Prompt**: rewritten to cap answers at ~5 lines, forbid disclaimers and
+  closing questions ("anything else?"), and stop inventing danger warnings on harmless
+  read-only commands. Role line now keys off the actually-installed model
+  (`qwen*` vs `gemma*`) instead of dead branches for models that were never installed.
+- **Recommended `~/.askrc`**: `OLLAMA_KEEP_ALIVE=30m` replaces a hardcoded `DEFAULT_MODEL`
+  override, so the model stays resident in VRAM between calls without bypassing routing.
+
 ## [3.1.0] - 2025-01-10
 
 ### Added

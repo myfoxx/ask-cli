@@ -16,17 +16,13 @@
 # SAVE_OUTPUT=""                  # Save responses to file (append to ~/.ask-history)
 # APPEND_OUTPUT=true              # Always append instead of overwrite
 
-# Custom model aliases
-# Uncomment to use custom models
-# ASK_CODER_MODEL="qwen2.5-coder:latest"
-# ASK_REASONING_MODEL="deepseek-r1:latest"
-# ASK_DEFAULT_MODEL="llama3.1:8b"
+# Pin every query to one model (bypasses smart routing entirely, except in -e error mode)
+# Uncomment to force a single model instead of automatic routing
+# DEFAULT_MODEL="qwen3.5:latest"
 
-# Custom keywords for model routing
-# You can add your own keywords to trigger specific models
-# Note: The base keywords are still checked, these are additions
-# CUSTOM_CODER_KEYWORDS="tensorflow|pytorch|cuda"
-# CUSTOM_REASONING_KEYWORDS="proof|theorem|statistical"
+# Keep the model resident in VRAM between calls instead of reloading it every time.
+# Strongly recommended, especially on limited-VRAM GPUs.
+# export OLLAMA_KEEP_ALIVE=30m
 
 # Color preferences
 # Uncomment to customize colors
@@ -38,7 +34,6 @@
 
 # Cache settings
 # CACHE_DIR="${HOME}/.ask-cache"  # Location of cache
-# CACHE_TTL=604800                # Cache time-to-live in seconds (7 days)
 
 # Example: Always save responses to history
 # SAVE_OUTPUT="${HOME}/.ask-history"

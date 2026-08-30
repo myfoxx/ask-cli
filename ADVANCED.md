@@ -22,11 +22,16 @@ SAVE_OUTPUT="${HOME}/.ask-history"
 APPEND_OUTPUT=true
 ```
 
-Load custom models if you have different ones installed:
+Keep the model resident in VRAM between calls (recommended on limited-VRAM GPUs):
 ```bash
 # ~/.askrc
-ASK_CODER_MODEL="your-custom-coder:latest"
-ASK_REASONING_MODEL="your-custom-reasoning:latest"
+export OLLAMA_KEEP_ALIVE=30m
+```
+
+Pin every query to one model, bypassing smart routing entirely (except `-e` error mode):
+```bash
+# ~/.askrc
+DEFAULT_MODEL="your-custom-model:latest"
 ```
 
 ## Advanced Flags
@@ -58,7 +63,7 @@ ask -t 30 "explain kubernetes"
 ask -t 10 "what is SSH?"
 
 # Long reasoning task with generous timeout
-ask -t 300 -m deepseek-r1 "prove the collatz conjecture"
+ask -t 300 -m qwen3.5:latest "prove the collatz conjecture"
 ```
 
 ### Output Saving (`-s`, `-a`)
@@ -137,19 +142,24 @@ The script automatically selects the best model based on query intent:
 
 ### Automatic Routing
 ```bash
-ask "how do I write a Python script?"        # → qwen2.5-coder
-ask "explain the difference between X and Y" # → deepseek-r1
-ask "what is Linux?"                         # → llama3.1 (general)
-ask "debug my nodejs error"                  # → deepseek-r1
-ask "how do I use Docker?"                   # → qwen2.5-coder
+ask "how do I write a Python script?"        # → qwen3.5:latest (code)
+ask "debug my nodejs error"                  # → qwen3.5:latest (debug/reasoning)
+ask "how do I use Docker?"                   # → qwen3.5:latest (code)
+ask "what is Linux?"                         # → gemma3:1b (general fallback)
+```
+
+`-f`/`--fast` skips routing entirely and forces `gemma3:1b`:
+```bash
+ask -f "what is Linux?"
 ```
 
 ### Force Specific Model
 ```bash
-ask -m deepseek-r1 "prove this theorem"
-ask -m qwen2.5-coder "write a bash function"
-ask -m mistral "tell me about climate change"
+ask -m qwen3.5:latest "prove this theorem"
+ask -m gemma3:1b "tell me a quick fact about climate change"
 ```
+
+Legacy shortcuts still work and map to the models actually installed: `-m coder`, `-m deep`, `-m llama`, `-m mistral`, `-m big` all resolve to `qwen3.5:latest`; `-m fast`, `-m small`, `-m tiny` resolve to `gemma3:1b`.
 
 ## Combining Flags
 
@@ -168,7 +178,7 @@ ask -c --cache -s project-guide.md -v "explain this codebase"
 ### Complex Example 3: CI/CD Debugging
 ```bash
 # Run failing test, limit output, with reasoning model, save report
-ask -e -l 100 -m deepseek-r1 -s test-failure-analysis.md npm test
+ask -e -l 100 -m qwen3.5:latest -s test-failure-analysis.md npm test
 ```
 
 ## Edge Cases and Workarounds
@@ -254,8 +264,8 @@ ask -t 300 "analyze this code for vulnerabilities"
 ```bash
 # Cache is based on full prompt hash
 # Different models = different caches
-ask --cache -m qwen2.5-coder "hello"
-ask --cache -m deepseek-r1 "hello"  # Different cache entry
+ask --cache -m qwen3.5:latest "hello"
+ask --cache -m gemma3:1b "hello"  # Different cache entry
 
 # Queries with context flag have different cache
 ask -c "question"  # Different cache than
@@ -264,29 +274,46 @@ ask "question"     # Same question without context
 
 ## Performance Tips
 
-1. **Use -l for large inputs**
+1. **Use -f for quick lookups**
+   ```bash
+   ask -f "how do I unzip a tar.gz?"  # gemma3:1b, near-instant
+   ```
+
+2. **Every query already runs with `--think=false` and `OLLAMA_CONTEXT_LENGTH=4096`**
+   `qwen3.5` is a hybrid thinking model — without `--think=false` it leaks its internal
+   reasoning into the output, which used to turn a 5-second answer into 60+ seconds.
+   Capping context length also keeps VRAM pressure down on 8GB-class GPUs. Both are
+   baked into the script; no flag needed.
+
+3. **Set `OLLAMA_KEEP_ALIVE` in `~/.askrc`**
+   ```bash
+   export OLLAMA_KEEP_ALIVE=30m
+   ```
+   Keeps the model resident in VRAM between calls instead of reloading it every time.
+
+5. **Use -l for large inputs**
    ```bash
    ask -e -l 50 some-command  # Faster than full output
    ```
 
-2. **Cache frequently asked questions**
+6. **Cache frequently asked questions**
    ```bash
    ask --cache "explain oauth2"
    ask --cache "how do I configure nginx?"
    ```
 
-3. **Use appropriate timeouts**
+7. **Use appropriate timeouts**
    ```bash
    ask -t 10 "quick question?"     # Fast questions
    ask -t 120 "complex analysis"   # Reasoning tasks
    ```
 
-4. **Disable glow for huge outputs**
+8. **Disable glow for huge outputs**
    ```bash
    ask -R "very long explanation"  # Skip markdown rendering
    ```
 
-5. **Use error mode instead of manual wrapping**
+9. **Use error mode instead of manual wrapping**
    ```bash
    # SLOW: outputs first, then queries
    ask "what is the error in: $(some-command 2>&1)"
@@ -315,7 +342,7 @@ nohup ollama serve > ollama.log 2>&1 &
 ollama list
 
 # Download missing model
-ollama pull qwen2.5-coder
+ollama pull qwen3.5
 
 # Or use --list-models
 ask --list-models
@@ -354,11 +381,11 @@ Add to `~/.bashrc` or `~/.zshrc`:
 # Quick error debugging
 alias askerr='ask -e'
 
-# Code specialist
-alias askcode='ask -m qwen2.5-coder'
+# Code/debug specialist
+alias askcode='ask -m qwen3.5:latest'
 
-# Deep thinking
-alias askdeep='ask -m deepseek-r1'
+# Instant answer
+alias askfast='ask -f'
 
 # With context
 alias askhere='ask -c'
@@ -388,7 +415,7 @@ grep "Request:" ~/.ask-history | cut -d: -f2-
 ### Integration with other tools
 ```bash
 # Use with fzf to select model
-MODEL=$(echo "coder\ndeepseek\nmistral\nllama" | fzf)
+MODEL=$(ollama list | awk 'NR>1{print $1}' | fzf)
 ask -m "$MODEL" "your question"
 
 # Track query metrics

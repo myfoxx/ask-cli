@@ -8,27 +8,28 @@
 
 ## Features
 
-- **Smart Model Routing**: Automatically detects the intent of your query and routes it to the specialized model:
-  - **Coding/Scripting** -> `qwen2.5-coder`
-  - **Logic/Reasoning/Debugging** -> `deepseek-r1`
-  - **General Questions** -> `llama3.1` (or your preferred generalist)
+- **Smart Model Routing**: Automatically detects the intent of your query and routes it to the right model:
+  - **Coding/Scripting/Debugging/Reasoning** -> `qwen3.5:latest` (mid-size, runs with `--think=false` for fast, non-rambling answers)
+  - **General/Quick Questions** -> `gemma3:1b` (tiny, near-instant)
+  - Falls back through `gemma3:1b` -> `gemma:2b` -> `qwen3.5:latest` -> `gemma4:e4b` if the target model isn't installed.
+- **Fast Mode** (`-f` / `--fast`): Force the smallest/fastest model (`gemma3:1b`) for an instant answer.
 - **Dynamic Context**: Automatically detects your OS and Shell to provide accurate commands (works on Arch, Debian, Fedora, macOS, etc.).
 - **Context Awareness** (`-c`): securely injects the current directory structure (using `eza`/`exa` if available) into the AI's context.
 - **Error Analysis** (`-e`): Special mode to debug failed commands or analyze error logs via pipe.
+- **Tight, No-Fluff Answers**: The system prompt caps replies at ~5 lines, forbids disclaimers/closing questions, and disables model "thinking" output so you get a command, not an essay.
 - **Beautiful Output**: Automatically formats output with Markdown syntax highlighting using `glow` (if installed).
-- **Safety Guardrails**: Explicitly warns you before suggesting destructive commands (`rm -rf`, `dd`, etc.).
+- **Safety Guardrails**: Warns you before suggesting genuinely destructive commands (`rm -rf`, `dd`, `mkfs`, `DROP TABLE`, etc.) — without inventing risk on harmless read-only commands.
 
 ## Dependencies
 
 - **Required**:
   - `bash` (4.0+)
-  - `ollama` (must be installed and running)
+  - `ollama` (0.20+ recommended, for `--think` flag support; must be installed and running)
   - **Models**: You need to pull the models used by the script (or edit the script to use yours):
 
     ```bash
-    ollama pull qwen2.5-coder
-    ollama pull deepseek-r1
-    ollama pull llama3.1
+    ollama pull qwen3.5
+    ollama pull gemma3:1b
     ```
 
 - **Optional (Recommended)**:
@@ -97,7 +98,15 @@ Analyze errors in two ways:
 ### Force a Model (`-m`)
 
 ```bash
-ask -m mistral "write a poem about linux"
+ask -m qwen3.5:latest "write a poem about linux"
+```
+
+### Fast Mode (`-f` / `--fast`)
+
+Skip routing and force the smallest, fastest model for an instant answer:
+
+```bash
+ask -f "how do I list files sorted by size?"
 ```
 
 ### Advanced Flags
@@ -151,18 +160,21 @@ VERBOSE=true
 MAX_LINES=100
 TIMEOUT=120
 CACHE_ENABLED=true
+export OLLAMA_KEEP_ALIVE=30m   # keep the model loaded in VRAM between calls
 ```
+
+> Avoid setting `DEFAULT_MODEL` in `~/.askrc` unless you really want to pin every query to one model — it bypasses the smart routing entirely (except in `-e` error mode).
 
 ### Aliases
 
-Recommended aliases for `.bashrc` or `.zshrc`:
+Recommended aliases for `.bashrc` or `.zshrc` (also in `alias.txt`):
 
 ```bash
-alias askcode='ask -m qwen2.5-coder:latest'   # Coding specialist
+alias askcode='ask -m qwen3.5:latest'         # Code/debug specialist
 alias askhere='ask -c'                        # Context aware
 alias askerr='ask -e'                         # Error analysis
-alias askdeep='ask -m deepseek-r1:latest'     # Deep thinking
 alias askv='ask -v'                           # Verbose mode
+alias askfast='ask -f'                        # Instant answer (gemma3:1b)
 alias askarchive='ask -a -s ~/.ask-history'   # Save to history
 ```
 

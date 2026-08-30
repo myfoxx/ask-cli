@@ -8,27 +8,28 @@
 
 ## Funzionalità
 
-- **Routing Intelligente**: Rileva l'intento della domanda e sceglie il modello specializzato:
-  - **Coding/Scripting** -> `qwen2.5-coder`
-  - **Logica/Debug** -> `deepseek-r1`
-  - **Generale** -> `llama3.1` (o un generalista a scelta)
+- **Routing Intelligente**: Rileva l'intento della domanda e sceglie il modello giusto:
+  - **Coding/Scripting/Debug/Ragionamento** -> `qwen3.5:latest` (modello medio, gira con `--think=false` per risposte veloci e senza divagazioni)
+  - **Domande generiche/veloci** -> `gemma3:1b` (piccolo, quasi istantaneo)
+  - Se il modello scelto non è installato, fallback automatico su `gemma3:1b` -> `gemma:2b` -> `qwen3.5:latest` -> `gemma4:e4b`.
+- **Modalità Veloce** (`-f` / `--fast`): Forza il modello più piccolo/veloce (`gemma3:1b`) per una risposta istantanea.
 - **Contesto Dinamico**: Rileva automaticamente OS e Shell per fornire comandi corretti (funziona su Arch, Debian, Fedora, macOS, ecc.).
 - **Contesto Directory** (`-c`): Injecta in modo sicuro la struttura della cartella corrente (usando `eza`/`exa`) nel prompt.
 - **Analisi Errori** (`-e`): Modalità speciale per debuggare comandi falliti o analizzare log via pipe.
+- **Risposte Concise, Senza Fronzoli**: Il system prompt limita le risposte a ~5 righe, vieta disclaimer/domande di chiusura, e disabilita il "ragionamento" interno del modello: ottieni un comando, non un saggio.
 - **Output Formattato**: Usa `glow` (se installato) per renderizzare il markdown con colori e sintassi evidenziata.
-- **Sicurezza**: Ti avvisa esplicitamente prima di suggerire comandi distruttivi (`rm -rf`, `dd`, ecc.).
+- **Sicurezza**: Ti avvisa prima di suggerire comandi realmente distruttivi (`rm -rf`, `dd`, `mkfs`, `DROP TABLE`, ecc.) — senza inventare rischi su comandi innocui in sola lettura.
 
 ## Dipendenze
 
 - **Richiesti**:
   - `bash` (4.0+)
-  - `ollama` (deve essere installato e in esecuzione)
+  - `ollama` (consigliata 0.20+, per il supporto al flag `--think`; deve essere installato e in esecuzione)
   - **Modelli**: Assicurati di aver scaricato i modelli usati (o modificato lo script):
 
     ```bash
-    ollama pull qwen2.5-coder
-    ollama pull deepseek-r1
-    ollama pull llama3.1
+    ollama pull qwen3.5
+    ollama pull gemma3:1b
     ```
 
 - **Opzionali (Consigliati)**:
@@ -97,7 +98,15 @@ Analizza errori in due modi:
 ### Forza un Modello (`-m`)
 
 ```bash
-ask -m mistral "scrivi una poesia su Linux"
+ask -m qwen3.5:latest "scrivi una poesia su Linux"
+```
+
+### Modalità Veloce (`-f` / `--fast`)
+
+Salta il routing e forza il modello più piccolo/veloce per una risposta istantanea:
+
+```bash
+ask -f "come elenco i file ordinati per dimensione?"
 ```
 
 ### Flag Avanzati
@@ -151,18 +160,21 @@ VERBOSE=true
 MAX_LINES=100
 TIMEOUT=120
 CACHE_ENABLED=true
+export OLLAMA_KEEP_ALIVE=30m   # tiene il modello in VRAM tra una chiamata e l'altra
 ```
+
+> Evita di impostare `DEFAULT_MODEL` in `~/.askrc` a meno che tu non voglia fissare ogni query a un solo modello — bypassa completamente il routing intelligente (tranne in modalità errore `-e`).
 
 ### Alias Consigliati
 
-Aggiungi questi alias al tuo `.bashrc` o `.zshrc`:
+Aggiungi questi alias al tuo `.bashrc` o `.zshrc` (presenti anche in `alias.txt`):
 
 ```bash
-alias askcode='ask -m qwen2.5-coder:latest'   # Specialista Coding
+alias askcode='ask -m qwen3.5:latest'         # Specialista Coding/Debug
 alias askhere='ask -c'                        # Con contesto locale
 alias askerr='ask -e'                         # Debugger errori
-alias askdeep='ask -m deepseek-r1:latest'     # Ragionamento profondo
 alias askv='ask -v'                           # Modalità verbose
+alias askfast='ask -f'                        # Risposta istantanea (gemma3:1b)
 alias askarchive='ask -a -s ~/.ask-history'   # Salva nella cronologia
 ```
 

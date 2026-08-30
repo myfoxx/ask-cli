@@ -111,29 +111,34 @@ truncate_input() {
 
 # --- Model Selection Logic ---
 select_model() {
+    # Usa DEFAULT_MODEL da ~/.askrc se definito
+    if [ -n "$DEFAULT_MODEL" ] && [ "$ERROR_MODE" = false ]; then
+        echo "$DEFAULT_MODEL"
+        return
+    fi
     local q_lower
     q_lower=$(echo "$1" | tr '[:upper:]' '[:lower:]')
     
     # If in Error Mode, prefer a strong reasoning model
     if [ "$ERROR_MODE" = true ]; then
-        echo "deepseek-r1:latest"
+        echo "qwen3.5:latest"
         return
     fi
 
-    # Qwen2.5-coder: code, scripting, file operations
+    # code, scripting, file operations -> mid-size model
     if echo "$q_lower" | grep -qE "(script|code|command|bash|python|rust|go|javascript|convert|file|directory|sed|awk|grep|find|rsync|tar|zip|gzip|pdf|doc|docx|rename|chmod|chown|systemd|service|socket|timer|regex|parse|extract|compress|sql|docker|kubernetes|git|function|method|class|library|module|import|export)"; then
-        echo "qwen2.5-coder:latest"
+        echo "qwen3.5:latest"
         return
     fi
 
-    # DeepSeek-R1: reasoning, troubleshooting, security
+    # reasoning, troubleshooting, security -> mid-size model
     if echo "$q_lower" | grep -qE "(debug|problem|error|failed|fail|why|reason|explain|analyze|think|reasoning|troubleshoot|root cause|issue|fix|bug|crash|hang|slow|memory|leak|performance|security|vulnerability|exploit|attack|cve|permission|denied|access|forbidden)"; then
-        echo "deepseek-r1:latest"
+        echo "qwen3.5:latest"
         return
     fi
-    
-    # Default fallback
-    echo "llama3.1:8b"
+
+    # Default fallback - small/fast
+    echo "gemma3:1b"
 }
 
 # --- Model Availability Check & Fallback ---
@@ -146,7 +151,7 @@ get_available_model() {
     fi
 
     echo -e "${YELLOW}Warning: Model '$target_model' not found locally.${NC}" >&2
-    local fallbacks=("llama3.1:8b" "mistral:latest" "gemma:2b" "qwen2.5:0.5b")
+    local fallbacks=("gemma3:1b" "gemma:2b" "qwen3.5:latest" "gemma4:e4b")
     for fb in "${fallbacks[@]}"; do
         if ollama list | grep -q "^${fb%%:*}"; then
             echo -e "${BLUE}Falling back to: $fb${NC}" >&2
@@ -164,11 +169,12 @@ get_available_model() {
 load_config
 check_dependencies
 
-while getopts "cm:vheRl:t:s:a-:" opt; do
+while getopts "cm:vheRl:t:s:af-:" opt; do
     case $opt in
         c) INCLUDE_CONTEXT=true ;;
         e) ERROR_MODE=true ;;
         m) MANUAL_MODEL="$OPTARG" ;;
+        f) MANUAL_MODEL="gemma3:1b" ;;
         v) VERBOSE=true ;;
         R) USE_GLOW=false ;;
         l) MAX_LINES="$OPTARG" ;;
@@ -178,6 +184,7 @@ while getopts "cm:vheRl:t:s:a-:" opt; do
         -)
             case "${OPTARG}" in
                 list-models) list_models ;;
+                fast) MANUAL_MODEL="gemma3:1b" ;;
                 cache) CACHE_ENABLED=true ;;
                 clear-cache) clear_cache ;;
                 help)
@@ -187,6 +194,7 @@ while getopts "cm:vheRl:t:s:a-:" opt; do
                     echo "  -c              Include current directory context"
                     echo "  -e              Error/Debug Mode (Pipe or Wrapper)"
                     echo "  -m MODEL        Force specific model"
+                    echo "  -f, --fast      Force fastest model (gemma3:1b)"
                     echo "  -v              Verbose details"
                     echo "  -R              Raw output (disable glow formatting)"
                     echo "  -l LINES        Max lines to include from input (0=unlimited)"
@@ -287,13 +295,16 @@ fi
 
 # --- Model Target ---
 if [ -n "$MANUAL_MODEL" ]; then
-    case "$MANUAL_MODEL" in
-        qwen*|coder) TARGET_MODEL="qwen2.5-coder:latest" ;;
-        deep*|r1) TARGET_MODEL="deepseek-r1:latest" ;;
-        llama*|llama3.1) TARGET_MODEL="llama3.1:8b" ;;
-        mistral*) TARGET_MODEL="mistral:latest" ;;
-        *) TARGET_MODEL="$MANUAL_MODEL" ;;
-    esac
+    # Se il modello esiste già in ollama usalo direttamente
+    if ollama list | grep -q "^${MANUAL_MODEL%%:*}"; then
+        TARGET_MODEL="$MANUAL_MODEL"
+    else
+        case "$MANUAL_MODEL" in
+            coder|deep*|r1|llama*|mistral*|big) TARGET_MODEL="qwen3.5:latest" ;;
+            fast|small|tiny) TARGET_MODEL="gemma3:1b" ;;
+            *) TARGET_MODEL="$MANUAL_MODEL" ;;
+        esac
+    fi
 else
     TARGET_MODEL=$(select_model "$QUESTION")
 fi
@@ -304,27 +315,22 @@ MODEL=$(get_available_model "$TARGET_MODEL")
 OS_INFO=$(uname -sr 2>/dev/null || echo "Linux Unknown")
 SHELL_INFO="${SHELL##*/}"
 
-BASE_SYSTEM_PROMPT="You are an expert operating on ${OS_INFO}, shell: ${SHELL_INFO}.
-Security: IF THE REQUESTED COMMAND IS DESTRUCTIVE (rm -rf, dd, mkfs, etc.), EXPLICITLY WARN THE USER BEFORE PROPOSING IT."
+BASE_SYSTEM_PROMPT="You are a terse CLI assistant on ${OS_INFO}, shell: ${SHELL_INFO}.
+STRICT RULES:
+- Max 5 lines of answer. No preamble, no disclaimers, no closing questions ('anything else?', 'let me know').
+- Give the command or fix first, one-line explanation only if truly needed.
+- Never warn about a command unless it is ACTUALLY destructive (rm -rf, dd, mkfs, DROP TABLE, kill -9 on wide patterns). Do not invent risk for harmless read-only commands like ls.
+- No chain-of-thought, no 'thinking' narration in output."
 
-if [[ "$MODEL" == *"coder"* ]]; then
+if [[ "$MODEL" == *"qwen"* ]]; then
     SYSTEM_CONTEXT="${BASE_SYSTEM_PROMPT}
-Role: Senior Dev/Sysadmin. CLI only.
-Response: direct command or fix. Zero superfluous theoretical explanations.
-Format: command ready-to-run if possible."
-elif [[ "$MODEL" == *"deepseek"* ]]; then
+Role: Senior Dev/Sysadmin. CLI only. Command ready-to-run."
+elif [[ "$MODEL" == *"gemma"* ]]; then
     SYSTEM_CONTEXT="${BASE_SYSTEM_PROMPT}
-Role: Security Researcher / Senior Sysadmin.
-Technical reasoning required: root cause analysis of the error.
-Focus: logical debug, missing dependencies, permission issues."
-elif [[ "$MODEL" == *"mistral"* ]]; then
-    SYSTEM_CONTEXT="${BASE_SYSTEM_PROMPT}
-Role: Power User. CLI-first approach.
-Output: practical and actionable solution."
+Role: Quick-reference assistant. One command, minimal words."
 else
     SYSTEM_CONTEXT="${BASE_SYSTEM_PROMPT}
-Role: Professional User.
-Preference: CLI-first. Direct and technical communication."
+Role: Professional User. Direct and technical communication."
 fi
 
 # --- Prompt Construction ---
@@ -378,13 +384,13 @@ if [ "$CACHE_ENABLED" = true ]; then
     else
         # Execute with optional timeout
         if [ "$TIMEOUT" -gt 0 ]; then
-            OUTPUT=$(timeout "$TIMEOUT" ollama run "$MODEL" "$PROMPT" 2>&1)
+            OUTPUT=$(timeout "$TIMEOUT" OLLAMA_CONTEXT_LENGTH=4096 ollama run "$MODEL" --think=false "$PROMPT" 2>&1)
             EXIT_CODE=$?
             if [ $EXIT_CODE -eq 124 ]; then
                 OUTPUT="Error: Request timed out after ${TIMEOUT} seconds."
             fi
         else
-            OUTPUT=$(ollama run "$MODEL" "$PROMPT")
+            OUTPUT=$(OLLAMA_CONTEXT_LENGTH=4096 ollama run "$MODEL" --think=false "$PROMPT")
         fi
         # Cache the result
         echo "$OUTPUT" | write_cache "$PROMPT"
@@ -392,13 +398,13 @@ if [ "$CACHE_ENABLED" = true ]; then
 else
     # Execute with optional timeout
     if [ "$TIMEOUT" -gt 0 ]; then
-        OUTPUT=$(timeout "$TIMEOUT" ollama run "$MODEL" "$PROMPT" 2>&1)
+        OUTPUT=$(timeout "$TIMEOUT" OLLAMA_CONTEXT_LENGTH=4096 ollama run "$MODEL" --think=false "$PROMPT" 2>&1)
         EXIT_CODE=$?
         if [ $EXIT_CODE -eq 124 ]; then
             OUTPUT="Error: Request timed out after ${TIMEOUT} seconds."
         fi
     else
-        OUTPUT=$(ollama run "$MODEL" "$PROMPT")
+        OUTPUT=$(OLLAMA_CONTEXT_LENGTH=4096 ollama run "$MODEL" --think=false "$PROMPT")
     fi
 fi
 

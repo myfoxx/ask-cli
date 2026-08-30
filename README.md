@@ -1,5 +1,9 @@
 # ASK - Intelligent AI Shell Helper
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Bash 4.0+](https://img.shields.io/badge/Bash-4.0+-blue.svg)](https://www.gnu.org/software/bash/)
+[![Ollama Required](https://img.shields.io/badge/Requires-Ollama-purple.svg)](https://ollama.com)
+
 **ask** is a smart Bash wrapper for [Ollama](https://ollama.com/) that brings the power of multiple LLMs directly to your terminal. It automatically selects the best model for your specific query, manages system context, and keeps your shell workflow efficient.
 
 ## Features
@@ -166,8 +170,3 @@ alias askarchive='ask -a -s ~/.ask-history'   # Save to history
 
 - **Basic Guide**: See [README.md](README.md) (this file)
 - **Advanced Usage**: See [ADVANCED.md](ADVANCED.md) for edge cases, performance tips, and complex examples
-
-
-## License
-
-MIT License. See [LICENSE](LICENSE) file for details.

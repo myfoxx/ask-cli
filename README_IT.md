@@ -1,5 +1,9 @@
 # ASK - Assistente AI Intelligente per Shell
 
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Bash 4.0+](https://img.shields.io/badge/Bash-4.0+-blue.svg)](https://www.gnu.org/software/bash/)
+[![Ollama Richiesto](https://img.shields.io/badge/Richiede-Ollama-purple.svg)](https://ollama.com)
+
 **ask** è un wrapper intelligente per [Ollama](https://ollama.com/) che porta la potenza degli LLM direttamente nel tuo terminale. Seleziona automaticamente il modello migliore per la tua richiesta (coding, ragionamento, chat), gestisce il contesto del sistema operativo e mantiene il tuo workflow efficiente.
 
 ## Funzionalità

@@ -33,3 +33,4 @@ coverage/
 # IDE
 .cursor/
 .github/workflows/*.local.yml
+*.local.md

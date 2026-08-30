@@ -111,7 +111,6 @@ For new features:
 ## Documentation
 
 - Update README.md (English) and README_IT.md (Italian) for user-facing changes
-
 - Update ADVANCED.md for edge cases and complex usage
 - Keep examples in sync across all documentation
 
